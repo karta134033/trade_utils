@@ -1684,6 +1684,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "trade_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-std",
+ "chrono",
+ "clap",
+ "csv",
+ "futures",
+ "log",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "simplelog",
+]
+
+[[package]]
 name = "trust-dns-proto"
 version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1787,23 +1804,6 @@ dependencies = [
  "form_urlencoded",
  "idna 0.3.0",
  "percent-encoding",
-]
-
-[[package]]
-name = "utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-std",
- "chrono",
- "clap",
- "csv",
- "futures",
- "log",
- "mongodb",
- "serde",
- "serde_json",
- "simplelog",
 ]
 
 [[package]]
