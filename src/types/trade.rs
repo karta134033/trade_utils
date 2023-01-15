@@ -24,6 +24,7 @@ impl Default for TradeSide {
 pub struct Trade {
     pub entry_price: f64,
     pub entry_side: TradeSide,
+    pub entry_ts: i64,
     pub exit_price: f64,
     pub position: f64,
     pub tp_price: f64, // take profit
