@@ -42,8 +42,8 @@ impl MongoClient {
         // Iterate over the results of the cursor.
         while let Some(doc) = cursor.try_next().await.unwrap() {
             let kline = Kline {
-                open_time: doc.get("open_time").unwrap().as_i64().unwrap(),
-                close_time: doc.get("close_time").unwrap().as_i64().unwrap(),
+                open_timestamp: doc.get("open_time").unwrap().as_i64().unwrap(),
+                close_timestamp: doc.get("close_time").unwrap().as_i64().unwrap(),
                 open: parse_f64(doc.get("open")),
                 high: parse_f64(doc.get("high")),
                 low: parse_f64(doc.get("low")),
