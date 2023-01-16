@@ -6,6 +6,7 @@ use log::info;
 use serde_json::Value;
 use sha2::Sha256;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use crate::clients::binance::parser::parse_api_kline;
 use crate::types::account::Account;
@@ -127,17 +128,22 @@ impl BinanceFuturesApiClient {
         Ok(account)
     }
 
-    pub async fn get_instruments(&self, symbol: String) -> Result<Option<InstrumentInfo>> {
+    pub async fn get_instruments(
+        &self,
+        symbol_set: &HashSet<String>,
+    ) -> Result<HashMap<String, InstrumentInfo>> {
         let endpoint = format!("{}{}", FUTURES_BASE, FUTURES_EXCHANGE_INFO);
         let request_url = reqwest::Url::parse(endpoint.as_str()).unwrap();
         let response = self.client.get(request_url).send().await?;
         let content = response.text().await?;
         let value: Value = serde_json::from_str(content.as_str())?;
         let symbols = value["symbols"].as_array().unwrap();
+        let mut symbol_to_instrument_info = HashMap::new();
         for s in symbols {
+            let symbol = s["symbol"].as_str().unwrap();
             if s["status"].as_str().unwrap() == "TRADING"
                 && s["contractType"].as_str().unwrap() == "PERPETUAL"
-                && s["symbol"].as_str().unwrap() == symbol
+                && symbol_set.contains(symbol)
             {
                 let mut tick_size = 0.;
                 let mut lot_size = 0.;
@@ -155,14 +161,17 @@ impl BinanceFuturesApiClient {
                         _ => {}
                     }
                 }
-                return Ok(Some(InstrumentInfo {
-                    symbol,
-                    tick_size,
-                    lot_size,
-                    min_qty,
-                }));
+                symbol_to_instrument_info.insert(
+                    symbol.to_owned(),
+                    InstrumentInfo {
+                        symbol: symbol.to_owned(),
+                        tick_size,
+                        lot_size,
+                        min_qty,
+                    },
+                );
             }
         }
-        Ok(None)
+        Ok(symbol_to_instrument_info)
     }
 }
