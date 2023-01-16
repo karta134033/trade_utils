@@ -8,6 +8,9 @@ use sha2::Sha256;
 use std::collections::HashMap;
 
 use crate::clients::binance::parser::parse_api_kline;
+use crate::types::account::Account;
+use crate::types::account::Asset;
+use crate::types::account::Position;
 use crate::types::kline::Kline;
 
 pub const FUTURES_KLINE: &str = "/fapi/v1/klines";
@@ -58,7 +61,7 @@ impl BinanceFuturesApiClient {
         Ok(klines)
     }
 
-    pub async fn get_account(&self, api_key: &str, secret_key: &str) -> Result<Value> {
+    pub async fn get_account(&self, api_key: &str, secret_key: &str) -> Result<Account> {
         let timestamp = Utc::now().timestamp_millis();
         let mut params = Vec::new();
         params.push(("timestamp".to_owned(), timestamp.to_string()));
@@ -74,7 +77,6 @@ impl BinanceFuturesApiClient {
         let endpoint = format!("{}{}", FUTURES_BASE, FUTURES_ACCOUNT);
 
         let request_url = reqwest::Url::parse_with_params(endpoint.as_str(), &params).unwrap();
-        info!("request_url: {:?}", request_url.to_string());
         let response = self
             .client
             .get(request_url)
@@ -83,6 +85,43 @@ impl BinanceFuturesApiClient {
             .await?;
         let content = response.text().await?;
         let value: Value = serde_json::from_str(content.as_str())?;
-        Ok(value)
+        let mut account = Account {
+            ..Default::default()
+        };
+        let asset_values = value["assets"].as_array().unwrap();
+        let position_values = value["positions"].as_array().unwrap();
+        for v in asset_values.iter() {
+            let asset = v["asset"].as_str().unwrap().to_owned();
+            let wallet_balance = v["walletBalance"].as_str().unwrap().parse::<f64>()?;
+            let available_balance = v["availableBalance"].as_str().unwrap().parse::<f64>()?;
+            let update_timestamp = v["updateTime"].as_i64().unwrap();
+            if available_balance != 0. {
+                account.assets.push(Asset {
+                    asset,
+                    wallet_balance,
+                    available_balance,
+                    update_timestamp,
+                });
+            }
+        }
+        for v in position_values.iter() {
+            let symbol = v["symbol"].as_str().unwrap().to_owned();
+            let unrealized_profit = v["unrealizedProfit"].as_str().unwrap().parse::<f64>()?;
+            let leverage = v["leverage"].as_str().unwrap().parse::<u64>()?;
+            let entry_price = v["entryPrice"].as_str().unwrap().parse::<f64>()?;
+            let position_side = v["positionSide"].as_str().unwrap().to_owned();
+            let position_amt = v["positionAmt"].as_str().unwrap().parse::<f64>()?;
+            if position_amt != 0. {
+                account.positions.push(Position {
+                    symbol,
+                    unrealized_profit,
+                    leverage,
+                    entry_price,
+                    position_side,
+                    position_amt,
+                });
+            }
+        }
+        Ok(account)
     }
 }
