@@ -11,10 +11,12 @@ use crate::clients::binance::parser::parse_api_kline;
 use crate::types::account::Account;
 use crate::types::account::Asset;
 use crate::types::account::Position;
+use crate::types::instrument::InstrumentInfo;
 use crate::types::kline::Kline;
 
 pub const FUTURES_KLINE: &str = "/fapi/v1/klines";
 pub const FUTURES_ACCOUNT: &str = "/fapi/v2/account";
+pub const FUTURES_EXCHANGE_INFO: &str = "/fapi/v1/exchangeInfo";
 pub const FUTURES_BASE: &str = "https://fapi.binance.com";
 
 pub struct BinanceFuturesApiClient {
@@ -123,5 +125,44 @@ impl BinanceFuturesApiClient {
             }
         }
         Ok(account)
+    }
+
+    pub async fn get_instruments(&self, symbol: String) -> Result<Option<InstrumentInfo>> {
+        let endpoint = format!("{}{}", FUTURES_BASE, FUTURES_EXCHANGE_INFO);
+        let request_url = reqwest::Url::parse(endpoint.as_str()).unwrap();
+        let response = self.client.get(request_url).send().await?;
+        let content = response.text().await?;
+        let value: Value = serde_json::from_str(content.as_str())?;
+        let symbols = value["symbols"].as_array().unwrap();
+        for s in symbols {
+            if s["status"].as_str().unwrap() == "TRADING"
+                && s["contractType"].as_str().unwrap() == "PERPETUAL"
+                && s["symbol"].as_str().unwrap() == symbol
+            {
+                let mut tick_size = 0.;
+                let mut lot_size = 0.;
+                let mut min_qty = 0.;
+                let filters = s["filters"].as_array().unwrap();
+                for f in filters {
+                    match f["filterType"].as_str().unwrap() {
+                        "PRICE_FILTER" => {
+                            tick_size = f["tickSize"].as_str().unwrap().parse::<f64>()?;
+                        }
+                        "LOT_SIZE" => {
+                            lot_size = f["stepSize"].as_str().unwrap().parse::<f64>()?;
+                            min_qty = f["minQty"].as_str().unwrap().parse::<f64>()?;
+                        }
+                        _ => {}
+                    }
+                }
+                return Ok(Some(InstrumentInfo {
+                    symbol,
+                    tick_size,
+                    lot_size,
+                    min_qty,
+                }));
+            }
+        }
+        Ok(None)
     }
 }
