@@ -14,20 +14,26 @@ use crate::types::account::Asset;
 use crate::types::account::Position;
 use crate::types::instrument::InstrumentInfo;
 use crate::types::kline::Kline;
+use crate::types::order::Order;
 
 pub const FUTURES_KLINE: &str = "/fapi/v1/klines";
 pub const FUTURES_ACCOUNT: &str = "/fapi/v2/account";
 pub const FUTURES_EXCHANGE_INFO: &str = "/fapi/v1/exchangeInfo";
+pub const FUTURES_ORDER: &str = "/fapi/v1/order";
 pub const FUTURES_BASE: &str = "https://fapi.binance.com";
 
 pub struct BinanceFuturesApiClient {
     client: reqwest::Client,
+    api_key: String,
+    secret_key: String,
 }
 
 impl BinanceFuturesApiClient {
-    pub fn new() -> BinanceFuturesApiClient {
+    pub fn new(api_key: String, secret_key: String) -> BinanceFuturesApiClient {
         BinanceFuturesApiClient {
             client: reqwest::Client::new(),
+            api_key,
+            secret_key,
         }
     }
 
@@ -67,26 +73,31 @@ impl BinanceFuturesApiClient {
         Ok(klines)
     }
 
-    pub async fn get_account(&self, api_key: &str, secret_key: &str) -> Result<Account> {
+    pub fn hash_signature(&self, params: &mut Vec<(String, String)>, secret_key: &str) {
+        let mut request_string = "".to_owned();
+        for (k, v) in params.iter() {
+            request_string += &format!("{}={}&", k, v);
+        }
         let timestamp = Utc::now().timestamp_millis();
-        let mut params = Vec::new();
-        params.push(("timestamp".to_owned(), timestamp.to_string()));
+        request_string += &format!("timestamp={}", timestamp);
 
-        let request_string = format!("timestamp={}", timestamp);
         let mut signed_key = Hmac::<Sha256>::new_from_slice(secret_key.as_bytes()).unwrap();
         signed_key.update(request_string.as_bytes());
 
         let signature = hex::encode(signed_key.finalize().into_bytes());
-        info!("signed_key: {}", signature);
+        params.push(("timestamp".to_owned(), timestamp.to_string()));
         params.push(("signature".to_owned(), signature));
+    }
 
+    pub async fn get_account(&self) -> Result<Account> {
+        let mut params = Vec::new();
+        self.hash_signature(&mut params, &self.secret_key);
         let endpoint = format!("{}{}", FUTURES_BASE, FUTURES_ACCOUNT);
-
         let request_url = reqwest::Url::parse_with_params(endpoint.as_str(), &params).unwrap();
         let response = self
             .client
             .get(request_url)
-            .header("X-MBX-APIKEY", api_key)
+            .header("X-MBX-APIKEY", &self.api_key)
             .send()
             .await?;
         let content = response.text().await?;
@@ -148,17 +159,17 @@ impl BinanceFuturesApiClient {
                 && s["contractType"].as_str().unwrap() == "PERPETUAL"
                 && symbol_set.contains(symbol)
             {
-                let mut tick_size = 0.;
-                let mut lot_size = 0.;
+                let mut tick_size = "".to_owned();
+                let mut lot_size = "".to_owned();
                 let mut min_qty = 0.;
                 let filters = s["filters"].as_array().unwrap();
                 for f in filters {
                     match f["filterType"].as_str().unwrap() {
                         "PRICE_FILTER" => {
-                            tick_size = f["tickSize"].as_str().unwrap().parse::<f64>()?;
+                            tick_size = f["tickSize"].as_str().unwrap().to_owned();
                         }
                         "LOT_SIZE" => {
-                            lot_size = f["stepSize"].as_str().unwrap().parse::<f64>()?;
+                            lot_size = f["stepSize"].as_str().unwrap().to_owned();
                             min_qty = f["minQty"].as_str().unwrap().parse::<f64>()?;
                         }
                         _ => {}
@@ -176,5 +187,49 @@ impl BinanceFuturesApiClient {
             }
         }
         Ok(symbol_to_instrument_info)
+    }
+
+    pub async fn place_order(
+        &self,
+        order: Order,
+        instrument_info: &InstrumentInfo,
+    ) -> Result<Value> {
+        let mut params = Vec::new();
+        params.push(("symbol".to_owned(), order.symbol));
+        params.push(("side".to_owned(), order.order_side.to_string()));
+        params.push(("type".to_owned(), order.order_type.to_string()));
+        params.push(("reduceOnly".to_owned(), order.reduce_only.to_string()));
+
+        let lot_precision =
+            instrument_info.lot_size.len() - 1 - instrument_info.lot_size.find('.').unwrap_or(0);
+        let quantity_string = format!("{:.*}", lot_precision, order.size);
+        params.push(("quantity".to_owned(), quantity_string));
+
+        if order.time_in_force.is_some() {
+            params.push((
+                "timeInForce".to_owned(),
+                order.time_in_force.unwrap().to_string(),
+            ));
+        }
+        if order.price.is_some() {
+            let tick_precision = instrument_info.tick_size.len()
+                - 1
+                - instrument_info.tick_size.find('.').unwrap_or(0);
+            let price_string = format!("{:.*}", tick_precision, order.price.unwrap());
+            params.push(("price".to_owned(), price_string));
+        }
+        info!("Order params: {:?}", params);
+        self.hash_signature(&mut params, &self.secret_key);
+        let endpoint = format!("{}{}", FUTURES_BASE, FUTURES_ORDER);
+        let request_url = reqwest::Url::parse_with_params(endpoint.as_str(), &params).unwrap();
+        let response = self
+            .client
+            .post(request_url)
+            .header("X-MBX-APIKEY", &self.api_key)
+            .send()
+            .await?;
+        let content = response.text().await?;
+        let value: Value = serde_json::from_str(content.as_str())?;
+        Ok(value)
     }
 }
