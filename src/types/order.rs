@@ -61,11 +61,11 @@ impl Order {
         }
     }
 
-    pub fn unwind_market_order(symbol: String, order_side: OrderSide, size: f64) -> Order {
+    pub fn unwind_market_order(symbol: String, order_side: OrderSide) -> Order {
         Order {
             symbol,
             order_side,
-            size,
+            size: 999.0,
             order_type: OrderType::Market,
             time_in_force: None,
             price: None,
