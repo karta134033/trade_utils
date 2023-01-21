@@ -14,6 +14,7 @@ pub struct Cli {
 pub enum Mode {
     Backtest,
     Hypertune,
+    Live,
 }
 
 impl FromStr for Mode {
@@ -23,8 +24,10 @@ impl FromStr for Mode {
         match s {
             "backtest" => Ok(Mode::Backtest),
             "hypertune" => Ok(Mode::Hypertune),
+            "live" => Ok(Mode::Live),
             "b" => Ok(Mode::Backtest),
             "h" => Ok(Mode::Hypertune),
+            "l" => Ok(Mode::Live),
             _ => Err(format!("Invalid mode: {}", s)),
         }
     }

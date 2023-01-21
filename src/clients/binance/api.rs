@@ -35,16 +35,18 @@ impl BinanceFuturesApiClient {
         &self,
         symbol: &str,
         interval: &str, // "1d, 1h, 1m"
-        start_time: &str,
+        start_time: Option<&str>,
         end_time: Option<&str>,
         limit: Option<&str>,
     ) -> Result<Vec<Kline>> {
         let mut params = HashMap::new();
         params.insert("symbol", symbol);
         params.insert("interval", interval);
-        params.insert("startTime", start_time);
+        if start_time.is_some() {
+            params.insert("startTime", start_time.unwrap());
+        }
         if end_time.is_some() {
-            params.insert("end_time", end_time.unwrap());
+            params.insert("endTime", end_time.unwrap());
         }
         if limit.is_some() {
             params.insert("limit", limit.unwrap());
@@ -57,10 +59,11 @@ impl BinanceFuturesApiClient {
         let response = self.client.get(request_url).send().await?;
         let content = response.text().await?;
         let values: Vec<Value> = serde_json::from_str(content.as_str())?;
-        let klines = values
+        let mut klines = values
             .into_iter()
             .map(|value| parse_api_kline(value).unwrap())
             .collect::<Vec<_>>();
+        klines.sort_by_key(|k| k.close_timestamp);
         Ok(klines)
     }
 
