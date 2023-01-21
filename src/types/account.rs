@@ -4,6 +4,17 @@ pub struct Account {
     pub positions: Vec<Position>,
 }
 
+impl Account {
+    pub fn get_usd_balance(&self) -> f64 {
+        for asset in self.assets.iter() {
+            if asset.asset == "USDT" {
+                return asset.available_balance;
+            }
+        }
+        0.
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct Position {
     pub symbol: String,

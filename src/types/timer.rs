@@ -92,7 +92,7 @@ impl Timer {
             }
         }
         if result {
-            info!("Update timer from {:?} to {:?}", prev, self.datetime);
+            println!("Update timer from {:?} to {:?}", prev, self.datetime);
         }
         result
     }
