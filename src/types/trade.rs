@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum TradeSide {
     Sell,
     Buy,
@@ -20,7 +22,7 @@ impl Default for TradeSide {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Trade {
     pub entry_price: f64,
     pub entry_side: TradeSide,
