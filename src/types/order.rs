@@ -12,6 +12,7 @@ impl fmt::Display for OrderType {
     }
 }
 
+#[derive(PartialEq)]
 pub enum OrderSide {
     Buy,
     Sell,
@@ -58,18 +59,6 @@ impl Order {
             time_in_force: None,
             price: None,
             reduce_only: false,
-        }
-    }
-
-    pub fn unwind_market_order(symbol: String, order_side: OrderSide) -> Order {
-        Order {
-            symbol,
-            order_side,
-            size: 999.0,
-            order_type: OrderType::Market,
-            time_in_force: None,
-            price: None,
-            reduce_only: true,
         }
     }
 }

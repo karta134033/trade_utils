@@ -24,6 +24,7 @@ impl Default for TradeSide {
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Trade {
+    pub symbol: String,
     pub entry_price: f64,
     pub entry_side: TradeSide,
     pub entry_ts: i64,

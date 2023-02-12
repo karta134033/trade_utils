@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_std::task;
 use chrono::Utc;
 use hmac::Hmac;
 use hmac::Mac;
@@ -6,7 +7,6 @@ use log::info;
 use serde_json::Value;
 use sha2::Sha256;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use crate::clients::binance::parser::parse_api_kline;
 use crate::types::account::Account;
@@ -22,6 +22,13 @@ pub const FUTURES_EXCHANGE_INFO: &str = "/fapi/v1/exchangeInfo";
 pub const FUTURES_ORDER: &str = "/fapi/v1/order";
 pub const FUTURES_BASE: &str = "https://fapi.binance.com";
 
+lazy_static::lazy_static! {
+    pub static ref SYMBOL_TO_INSTRUMENT_INFO: HashMap<String, InstrumentInfo> = {
+        let api_client = BinanceFuturesApiClient::new("".to_owned(), "".to_owned());
+        task::block_on(api_client.get_instruments()).unwrap()
+    };
+}
+
 pub struct BinanceFuturesApiClient {
     client: reqwest::Client,
     api_key: String,
@@ -35,6 +42,10 @@ impl BinanceFuturesApiClient {
             api_key,
             secret_key,
         }
+    }
+
+    pub fn has_keys(&self) -> bool {
+        self.api_key != "".to_owned() && self.secret_key != "".to_owned()
     }
 
     pub async fn get_klines(
@@ -142,10 +153,7 @@ impl BinanceFuturesApiClient {
         Ok(account)
     }
 
-    pub async fn get_instruments(
-        &self,
-        symbol_set: &HashSet<String>,
-    ) -> Result<HashMap<String, InstrumentInfo>> {
+    pub async fn get_instruments(&self) -> Result<HashMap<String, InstrumentInfo>> {
         let endpoint = format!("{}{}", FUTURES_BASE, FUTURES_EXCHANGE_INFO);
         let request_url = reqwest::Url::parse(endpoint.as_str()).unwrap();
         let response = self.client.get(request_url).send().await?;
@@ -157,7 +165,6 @@ impl BinanceFuturesApiClient {
             let symbol = s["symbol"].as_str().unwrap();
             if s["status"].as_str().unwrap() == "TRADING"
                 && s["contractType"].as_str().unwrap() == "PERPETUAL"
-                && symbol_set.contains(symbol)
             {
                 let mut tick_size = "".to_owned();
                 let mut lot_size = "".to_owned();

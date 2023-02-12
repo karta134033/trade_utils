@@ -2035,6 +2035,7 @@ dependencies = [
  "futures",
  "hex",
  "hmac",
+ "lazy_static",
  "log",
  "mongodb",
  "reqwest",
